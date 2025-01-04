@@ -1,4 +1,18 @@
 
+## track progress
+- [x] collect data
+    - [x] collect eligible symbols
+    - [x] collect historical data of symbols
+- [x] feature engineering
+    - [x] feature selection
+    - [x] calculate features
+    - [x] visualize features
+- [ ] model training
+- [ ] backtesting
+- [ ] model evaluation
+- [ ] organize cells into relative classes.
+- [ ] model deployment on streamlit
+
 ## project structure
 _consistently under update_
 ```
