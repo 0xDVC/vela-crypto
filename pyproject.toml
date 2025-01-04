@@ -12,6 +12,7 @@ scikit-learn = "^1.6.0"
 python-binance = "^1.0.27"
 pytest = "^8.3.4"
 tqdm = "^4.67.1"
+joblib = "^1.4.2"
 
 
 [tool.poetry.group.dev.dependencies]
