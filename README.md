@@ -1,3 +1,8 @@
+## project
+short-term prediction model for recently listed, small-cap cryptocurrencies using the Hidden Markov Model with the Baum-Welch algorithm to detect market regimes.
+
+## project overview
+currently, the project is in the exploratory phase and most of the notes are in the ```explore.ipynb``` file.
 
 ## track progress
 - [x] collect data
