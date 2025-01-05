@@ -5,3 +5,5 @@ joblib
 matplotlib
 seaborn
 requests
+hmmlearn
+ipykernel

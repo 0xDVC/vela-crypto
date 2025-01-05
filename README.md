@@ -51,6 +51,5 @@ _consistently under update_
 ```bash
 git clone git@github.com:0xDVC/vela-crypto.git
 cd vela-crypto
-python -m poetry init # 'python -m pip install poetry' if you don't have it
-python -m poetry $(cat requirements.txt) 
+python -m poetry add $(cat requirements.txt) # 'python -m pip install poetry' if you don't have it
 ```

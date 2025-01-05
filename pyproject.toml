@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "vela-crypto"
 version = "0.1.0"
-description = "Short-Term Crypto Prediction Using a Baum-Welch HMM"
-authors = ["HMM"]
+description = ""
+authors = ["0xDVC <neilohene@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -10,17 +10,13 @@ python = "^3.11"
 pandas = "^2.2.3"
 scikit-learn = "^1.6.0"
 python-binance = "^1.0.27"
-pytest = "^8.3.4"
-tqdm = "^4.67.1"
 joblib = "^1.4.2"
-hmmlearn = "^0.3.3"
 matplotlib = "^3.10.0"
 seaborn = "^0.13.2"
 requests = "^2.32.3"
-
-
-[tool.poetry.group.dev.dependencies]
+hmmlearn = "^0.3.3"
 ipykernel = "^6.29.5"
+
 
 [build-system]
 requires = ["poetry-core"]

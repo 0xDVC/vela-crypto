@@ -153,7 +153,7 @@ class Collector:
                 klines = self.cached_get_klines(symbol, "1d", 90)
                 
                 # data quality checks
-                if len(klines) < 7:  # Minimum 7 days of data
+                if len(klines) < 7:  # minimum 7 days of data
                     print(f"Skipping {symbol}: Insufficient historical data")
                     continue
                     
@@ -288,11 +288,15 @@ class Collector:
         
         filtered_pairs = self.filter_usdt_pairs()
         print(f"found {len(filtered_pairs)} pairs meeting volume criteria")
-        filtered_pairs.to_csv(f'./data/filtered_pairs_{timestamp}.csv')
+        
+        os.makedirs('./data/pairs', exist_ok=True)
+        filtered_pairs.to_csv(f'./data/pairs/filtered_pairs_{timestamp}.csv')
 
         candidates_df = self.find_candidates(filtered_pairs)
         print(f"found {len(candidates_df)} candidates meeting all criteria")
-        candidates_df.to_csv(f'./data/candidates_{timestamp}.csv')
+
+        os.makedirs('./data/candidates', exist_ok=True)
+        candidates_df.to_csv(f'./data/candidates/candidates_{timestamp}.csv')
 
         symbols = candidates_df.index.tolist()
         
@@ -304,7 +308,8 @@ class Collector:
             historical_data = self.fetch_historical_data(batch_candidates)
             
             for symbol, df in historical_data.items():
-                df.to_csv(f'./data/historical_{symbol}_{timestamp}.csv')
+                os.makedirs('./data/historical', exist_ok=True)
+                df.to_csv(f'./data/historical/historical_{symbol}_{timestamp}.csv')
                 
             
             if i + batch_size < len(symbols):
