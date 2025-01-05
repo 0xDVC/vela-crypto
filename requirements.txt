@@ -4,3 +4,4 @@ python-binance
 joblib
 matplotlib
 seaborn
+requests
