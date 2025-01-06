@@ -6,7 +6,6 @@ from typing import Dict, List
 
 
 ## Trading Strategy
-# Trading Strategy:
 # 	Buy/Hold if Bullish.
 # 	Sell/Short if Bearish.
 # 	Hold cash if Neutral.
