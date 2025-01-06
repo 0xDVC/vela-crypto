@@ -2,7 +2,8 @@
 short-term prediction model for recently listed, small-cap cryptocurrencies using the Hidden Markov Model with the Baum-Welch algorithm to detect market regimes.
 
 ## project overview
-currently, the project is in the exploratory phase and most of the notes are in the ```explore.ipynb``` file.
+revised: currently, fine-tuning the model and backtesting.
+
 
 ## track progress
 - [x] collect data
@@ -12,10 +13,10 @@ currently, the project is in the exploratory phase and most of the notes are in 
     - [x] feature selection
     - [x] calculate features
     - [x] visualize features
-- [ ] model training (WIP)
-- [ ] backtesting
-- [ ] model evaluation
-- [ ] organize cells into relative classes. (WIP)
+- [x] model training (WIP)
+- [x] backtesting
+- [x] model evaluation (fine-tuning)
+- [x] organize cells into relative classes. (WIP)
 - [ ] model deployment on streamlit
 
 ## justification of choices:
@@ -35,12 +36,26 @@ currently, the project is in the exploratory phase and most of the notes are in 
     python -m core.collect
 ```
 
+### run
+```bash
+    python main.py
+```
 
 ## project structure
 _consistently under update_
 ```
+.
 ├── README.md
+├── __init__.py
+├── core
+│   ├── __init__.py
+│   ├── backtest.py
+│   ├── collect.py
+│   ├── features.py
+│   └── model.py
 ├── explore.ipynb
+├── index.html
+├── main.py
 ├── poetry.lock
 ├── pyproject.toml
 └── requirements.txt

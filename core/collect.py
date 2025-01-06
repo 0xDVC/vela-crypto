@@ -6,6 +6,7 @@ import requests
 import os
 import json
 import certifi
+import time
 
 @dataclass
 class MarketFilters:
@@ -42,44 +43,45 @@ class Collector:
 
     @property
     def cached_get_klines(self):
-        """klines getter with caching"""    # memoized approach
+        """klines getter with caching"""
         @self.memory.cache
-        def _get_klines(symbol, interval='15m', limit=100):
+        def _get_klines(symbol, interval='15m', limit=1000):
+            """Get klines with pagination support"""
             if interval not in self.VALID_INTERVALS:
                 raise ValueError(f"Invalid interval. Must be one of {self.VALID_INTERVALS}")
-            return self.client.get_klines(symbol=symbol, interval=interval, limit=limit)
-        return _get_klines
-
-    # def get_binance_usdt_pairs(self, max_market_cap=100_000_000):
-    #     """fetch USDT token pairs with market cap below max_market_cap from binance."""
-    #     url = "https://www.binance.com/bapi/apex/v1/friendly/apex/marketing/complianceSymbolList"
-        
-    #     try:
-    #         response = requests.get(
-    #             url,
-    #             headers={"Accept-Encoding": "gzip"},
-    #             verify=certifi.where()
-    #         )
-    #         response.raise_for_status()
-    #         data = response.json()
             
-    #         usdt_pairs = []
-    #         for asset in data.get("data", []):
-    #             symbol = asset.get("symbol", "")
-    #             market_cap = asset.get("marketCap")
+            # calculate time ranges
+            end_time = int(pd.Timestamp.now().timestamp() * 1000)
+            # start time = 3 months + 1 week ago
+            start_time = int((pd.Timestamp.now() - pd.Timedelta(days=97)).timestamp() * 1000)
+            
+            # get all klines between start and end time
+            all_klines = []
+            current_start = start_time
+            
+            while current_start < end_time:
+                klines = self.client.get_klines(
+                    symbol=symbol,
+                    interval=interval,
+                    limit=1000,
+                    startTime=current_start,
+                    endTime=end_time
+                )
                 
-    #             if "USDT" in symbol and market_cap is not None:
-    #                 if market_cap <= max_market_cap:
-    #                     usdt_pairs.append(symbol)
+                if not klines:
+                    break
+                    
+                all_klines.extend(klines)
+                
+                # update start time for next batch
+                current_start = klines[-1][0] + 1
+                
+            print(f"collected {len(all_klines)} bars for {symbol} "
+                  f"from {pd.Timestamp(start_time, unit='ms')} "
+                  f"to {pd.Timestamp(end_time, unit='ms')}")
             
-    #         return set(usdt_pairs)
-            
-    #     except requests.RequestException as e:
-    #         print(f"fetch error: {e}")
-    #         return set()
-    #     except json.JSONDecodeError:
-    #         print("failed to parse json")
-    #         return set()
+            return all_klines
+        return _get_klines
 
     def filter_usdt_pairs(self):
         """filter USDT trading pairs based on volume and market cap."""
@@ -202,84 +204,73 @@ class Collector:
                                        'avg_daily_volume', 'volume_stability'])
 
     def get_latest_data(self, symbol: str) -> pd.DataFrame:
-        """get latest historical data from cache if available"""
-        files = [f for f in os.listdir(self.data_dir) 
-                 if f.startswith(f'historical_{symbol}_')]
+        """get latest historical data"""
+        filename = f"{self.data_dir}/historical_{symbol}.csv"
         
-        if not files:
-            return None
-        
-        latest_file = sorted(files)[-1]
-        return pd.read_csv(
-            f"{self.data_dir}/{latest_file}", 
-            index_col='timestamp', 
-            parse_dates=True
-        )
+        if os.path.exists(filename):
+            return pd.read_csv(filename, 
+                              index_col='timestamp', 
+                              parse_dates=True)
+        return None
 
     def fetch_historical_data(self, candidates_df, interval="15m"):
-        """fetch historical price data for candidates with caching"""
+        """fetch historical price data for candidates"""
         historical_data = {}
 
         for symbol in candidates_df.index:
             try:
-                cached_df = self.get_latest_data(symbol)
+                # Get data
+                klines = self.cached_get_klines(symbol=symbol, interval=interval)
                 
-                if cached_df is not None:
-                    last_timestamp = cached_df.index[-1]
-                    new_klines = self.cached_get_klines(
-                        symbol=symbol,
-                        interval=interval,
-                        limit=100  
-                    )
+                if not klines:
+                    print(f"No data found for {symbol}")
+                    continue
                     
-                    new_df = pd.DataFrame(new_klines, columns=[
-                        'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                        'close_time', 'quote_volume', 'trades',
-                        'taker_buy_volume', 'taker_buy_quote_volume', 'ignore'
-                    ])
-                    
-                    new_df['timestamp'] = pd.to_datetime(new_df['timestamp'], unit='ms')
-                    new_df.set_index('timestamp', inplace=True)
-                    
-                    numeric_columns = ['open', 'high', 'low', 'close', 'volume', 
-                                     'quote_volume', 'trades', 'taker_buy_volume', 
-                                     'taker_buy_quote_volume']
-                    for col in numeric_columns:
-                        new_df[col] = pd.to_numeric(new_df[col])
-                    
-                    historical_data[symbol] = pd.concat([
-                        cached_df,
-                        new_df[new_df.index > last_timestamp]
-                    ]).drop_duplicates()
-                    
-                else:
-                    klines = self.cached_get_klines(
-                        symbol=symbol,
-                        interval=interval,
-                        limit=self.filters.max_days * 24
-                    )
-                    
-                    df = pd.DataFrame(klines, columns=[
-                        'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                        'close_time', 'quote_volume', 'trades',
-                        'taker_buy_volume', 'taker_buy_quote_volume', 'ignore'
-                    ])
-                    
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                    df.set_index('timestamp', inplace=True)
-                    
-                    numeric_columns = ['open', 'high', 'low', 'close', 'volume', 
-                                     'quote_volume', 'trades', 'taker_buy_volume', 
-                                     'taker_buy_quote_volume']
-                    for col in numeric_columns:
-                        df[col] = pd.to_numeric(df[col])
-                            
-                    historical_data[symbol] = df
+                # Convert to DataFrame
+                df = pd.DataFrame(klines, columns=[
+                    'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                    'close_time', 'quote_volume', 'trades',
+                    'taker_buy_volume', 'taker_buy_quote_volume', 'ignore'
+                ])
+                
+                # Process timestamps and set index
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                df.set_index('timestamp', inplace=True)
+                
+                # Convert numeric columns
+                numeric_columns = ['open', 'high', 'low', 'close', 'volume', 
+                                 'quote_volume', 'trades', 'taker_buy_volume', 
+                                 'taker_buy_quote_volume']
+                for col in numeric_columns:
+                    df[col] = pd.to_numeric(df[col])
+                
+                # Save without timestamp in filename
+                filename = f"data/historical_{symbol}.csv"
+                df.to_csv(filename)
+                
+                historical_data[symbol] = df
+                print(f"Processed {symbol}: {len(df)} bars")
 
             except Exception as e:
                 print(f"Error fetching history for {symbol}: {str(e)}")
 
         return historical_data
+
+    def save_candidates(self, candidates_df):
+        """Save candidates without timestamp"""
+        if not candidates_df.empty:
+            filename = "data/candidates/candidates.csv"
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            candidates_df.to_csv(filename)
+            print(f"Saved {len(candidates_df)} candidates")
+
+    def save_filtered_pairs(self, pairs_df):
+        """Save filtered pairs without timestamp"""
+        if not pairs_df.empty:
+            filename = "data/pairs/filtered_pairs.csv"
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            pairs_df.to_csv(filename)
+            print(f"Saved {len(pairs_df)} filtered pairs")
 
     def collect_batch(self, batch_size=50, delay=1):
         """run full data collection process in batches and save results"""
@@ -319,47 +310,3 @@ class Collector:
             "candidates": candidates_df,
             "timestamp": timestamp
         }
-
-
-if __name__ == '__main__':
-    import time
-    
-    print("Starting data collection...")
-    start_time = time.time()
-    
-    # initialize collector
-    collector = Collector(
-        cache_dir="./.cache",
-        data_dir="./data"
-    )
-    
-    # run batch collection with progress tracking
-    results = collector.collect_batch(batch_size=50, delay=1)
-    
-    # print summary
-    end_time = time.time()
-    duration = end_time - start_time
-    
-    print("\ncollection:")
-    print(f"total time: {duration:.2f} seconds")
-    print(f"timestamp: {results['timestamp']}")
-    print(f"total candidates: {len(results['candidates'])}")
-    
-    # check sample candidates
-    candidates_df = results['candidates']
-    if not candidates_df.empty:
-        print("\nsample:")
-        print(candidates_df.head())
-        
-        # summary stats
-        summary_stats = {
-            'total_pairs': len(candidates_df),
-            'avg_market_cap': candidates_df['market_cap'].mean(),
-            'avg_volume': candidates_df['volume_24h'].mean(),
-            'avg_age': candidates_df['days_listed'].mean()
-        }
-        
-        print("\mrkt stats:")
-        for key, value in summary_stats.items():
-            print(f"{key}: {value:,.2f}")
-        
