@@ -12,10 +12,10 @@ currently, the project is in the exploratory phase and most of the notes are in 
     - [x] feature selection
     - [x] calculate features
     - [x] visualize features
-- [ ] model training
+- [ ] model training (WIP)
 - [ ] backtesting
 - [ ] model evaluation
-- [ ] organize cells into relative classes.
+- [ ] organize cells into relative classes. (WIP)
 - [ ] model deployment on streamlit
 
 ## justification of choices:

@@ -2,30 +2,32 @@ from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 
+
+## update this later, rsi still pretty shaky. model needs more fine-tuning
 @dataclass
 class Features:
-    volatility_window: int = 14
-    volume_ma_window: int = 14
-    rsi_window: int = 14
+    volatility_window: int = 24
+    volume_ma_window: int = 48
+    rsi_window: int = 96
 
-class HMMFeatureEngineer:
+class FeatureEngineer:
     def __init__(self, params: Features = None):
         self.params = params or Features()
     
-    def calculate_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """calculate core features for HMM model"""
+    def process_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """generate core features for HMM model"""
         features = pd.DataFrame(index=df.index)
         
-        # 1. Returns - normally distributed, captures price movement
+        # returns - normally distributed, captures price movement
         features['returns'] = np.log(df['close'] / df['close'].shift(1))
         
-        # 2. Volatility - right skewed, captures market turbulence
+        # volatility - right skewed, captures market turbulence
         features['volatility'] = self._calculate_volatility(df)
         
-        # 3. Volume Intensity - right skewed, captures trading activity
+        # volume Intensity - right skewed, captures trading activity
         features['volume_intensity'] = self._calculate_volume_features(df)
         
-        # 4. RSI - symmetrically distributed, captures momentum
+        # rsi - symmetrically distributed, captures momentum
         features['rsi'] = self._calculate_rsi(df)
         
         return features.dropna()
