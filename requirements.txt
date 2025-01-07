@@ -6,4 +6,7 @@ matplotlib
 seaborn
 requests
 hmmlearn
+ta
 ipykernel
+streamlit
+plotly

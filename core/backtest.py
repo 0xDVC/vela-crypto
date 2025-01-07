@@ -1,103 +1,159 @@
 from dataclasses import dataclass
 import pandas as pd
 import numpy as np
-from typing import Dict, List
-
-
-
-## Trading Strategy
-# 	Buy/Hold if Bullish.
-# 	Sell/Short if Bearish.
-# 	Hold cash if Neutral.
+from typing import Dict
 
 
 @dataclass
 class BacktestConfig:
-    initial_balance: float = 10000.0  # USDT
-    position_size: float = 0.1        # 10% of balance per trade
-    stop_loss: float = 0.02          # 2% stop loss
-    take_profit: float = 0.03        # 3% take profit
+    initial_balance: float = 10000.0
+    position_size: float = 0.2        # Base position size
+    base_stop_loss: float = 0.02      # 2% base stop loss
+    base_take_profit: float = 0.03    # 3% base take profit
     maker_fee: float = 0.001         # 0.1% maker fee
     taker_fee: float = 0.001         # 0.1% taker fee
+    min_bull_prob: float = 0.65      # Minimum bull probability
+    max_positions: int = 3           # Maximum concurrent positions
+    min_regime_strength: float = 0.7  # Minimum regime strength
+    min_volume: float = 1000000.0     # 1M USDT daily volume minimum
 
 class BacktestStrategy:
     def __init__(self, config: BacktestConfig = None):
         self.config = config or BacktestConfig()
         
-    def should_trade(self, state: str, confidence: float, volatility: float, rsi: float) -> bool:
-        """Determine if conditions are right for trading based on market state"""
-        # Base conditions for all states
-        meets_volatility = 0.005 < volatility < 0.03
-        
-        if state == 'bull':
-            # More aggressive in bull markets
-            return (confidence > 0.70 and  # Lower confidence threshold
-                    meets_volatility and
-                    rsi > 45 and rsi < 75)  # Wider RSI range
-                
-        elif state == 'bear':
-            # Very conservative in bear markets
-            return (confidence > 0.85 and  # Higher confidence needed
-                    meets_volatility and
-                    rsi < 35)  # Only trade strong oversold conditions
-                
-        elif state == 'neutral':
-            # Moderate approach in neutral markets
-            return (confidence > 0.80 and  # Moderate confidence threshold
-                    meets_volatility and
-                    (rsi < 35 or rsi > 65))  # Trade only at extremes
-        
-        return False
-
     def run_backtest(self, price_data: pd.DataFrame, predictions: pd.DataFrame) -> Dict:
-        """Run backtest with simplified state-based strategy"""
-        print("\nRunning backtest...")
+        """Enhanced backtest with regime-based position sizing"""
+        portfolio = self._initialize_portfolio(price_data)
+        active_positions = 0
+        entry_price = None  # Track entry price
+        last_trade_idx = 0  # Track last trade index
+        min_hold_bars = 24  # Minimum hold time in bars
+        daily_trades = 0    # Initialize daily trades counter
         
-        # Initialize portfolio tracking
+        for i in range(1, len(portfolio)):
+            # Get current state and probabilities
+            state = predictions['state'].iloc[i]
+            bull_prob = predictions['bull_prob'].iloc[i]
+            regime_strength = max(predictions[['bull_prob', 'bear_prob', 'neutral_prob']].iloc[i])
+            
+            # Dynamic risk adjustment based on regime strength
+            stop_loss = self.config.base_stop_loss * (1 - (regime_strength - 0.5))
+            take_profit = self.config.base_take_profit * (1 + (regime_strength - 0.5))
+            
+            # Entry/Exit logic with minimum hold time
+            if i - last_trade_idx >= min_hold_bars:
+                # Entry conditions
+                if portfolio['position'].iloc[i-1] == 0:  # Not in position
+                    # Get dynamic threshold
+                    current_threshold = predictions['bull_threshold'].iloc[i]
+                    
+                    # Bull regime entry with dynamic threshold
+                    if (state == 'bull' and 
+                        bull_prob > current_threshold * 1.1):  # Require 10% above average
+                        
+                        position_size = self.config.position_size
+                        entry_amount = portfolio['cash'].iloc[i-1] * position_size
+                        shares = entry_amount / portfolio['price'].iloc[i] * (1 - self.config.maker_fee)
+                        
+                        portfolio.loc[portfolio.index[i], 'position'] = shares
+                        portfolio.loc[portfolio.index[i], 'cash'] = portfolio['cash'].iloc[i-1] - entry_amount
+                        portfolio.loc[portfolio.index[i], 'trade'] = 'buy'
+                        entry_price = portfolio['price'].iloc[i]
+                        last_trade_idx = i
+                        daily_trades += 1
+                
+                # Exit conditions
+                elif portfolio['position'].iloc[i-1] > 0:
+                    current_threshold = predictions['bull_threshold'].iloc[i]
+                    
+                    # Exit when probability falls significantly below average
+                    if (state == 'bear' or 
+                        bull_prob < current_threshold * 0.9):  # Exit when 10% below average
+                        
+                        portfolio.loc[portfolio.index[i], 'position'] = 0
+                        portfolio.loc[portfolio.index[i], 'cash'] += (
+                            portfolio['position'].iloc[i-1] * 
+                            portfolio['price'].iloc[i] * 
+                            (1 - self.config.taker_fee)
+                        )
+                        portfolio.loc[portfolio.index[i], 'trade'] = 'sell'
+                        last_trade_idx = i
+                        daily_trades += 1
+            
+            # Update portfolio values
+            portfolio = self._update_portfolio_values(portfolio, i)
+        
+        return self._calculate_results(portfolio, predictions)
+
+    def _can_enter_position(self, state: str, bull_prob: float, regime_strength: float) -> bool:
+        """Check if we can enter a new position"""
+        return (
+            state == 'bull' and 
+            bull_prob > self.config.min_bull_prob and
+            regime_strength > self.config.min_regime_strength
+        )
+
+    def _should_exit_position(self, pnl: float, state: str, bull_prob: float, 
+                            stop_loss: float, take_profit: float) -> bool:
+        """Determine if we should exit the position"""
+        return (
+            pnl < -stop_loss or                  # Stop loss hit
+            pnl > take_profit or                 # Take profit hit
+            state == 'bear' or                   # Bear regime
+            bull_prob < self.config.min_bull_prob * 0.9  # Weakening bull probability
+        )
+
+    def _initialize_portfolio(self, price_data: pd.DataFrame):
+        """Initialize the portfolio"""
         portfolio = pd.DataFrame(index=price_data.index)
-        portfolio['value'] = self.config.initial_balance
+        portfolio['price'] = price_data['close']
         portfolio['position'] = 0.0
         portfolio['trade'] = ''
-        portfolio['buy_hold'] = self.config.initial_balance * (price_data['close'] / price_data['close'].iloc[0])
+        portfolio['value'] = self.config.initial_balance
+        portfolio['cash'] = self.config.initial_balance
+        portfolio['holdings'] = 0.0
+        portfolio['drawdown'] = 0.0
         
-        position_size = self.config.initial_balance * self.config.position_size
-        in_position = False
-        entry_price = 0
+        # Add buy & hold calculation
+        portfolio['buy_hold'] = self.config.initial_balance * (
+            (1 + price_data['close'].pct_change().fillna(0)).cumprod()
+        )
         
-        for i in range(1, len(price_data)):
-            current_price = price_data['close'].iloc[i]
-            state = predictions['label'].iloc[i]
-            confidence = predictions['confidence'].iloc[i]
-            
-            # Copy previous values
-            portfolio.loc[portfolio.index[i], 'value'] = portfolio['value'].iloc[i-1]
-            portfolio.loc[portfolio.index[i], 'position'] = portfolio['position'].iloc[i-1]
-            
-            # Simple state-based trading rules
-            if not in_position:  # Currently in cash
-                if state == 'bull' and confidence > 0.6:  # Enter long in bull market
-                    entry_price = current_price
-                    in_position = True
-                    portfolio.loc[portfolio.index[i], 'trade'] = 'entry'
-                    portfolio.loc[portfolio.index[i], 'position'] = float(position_size / current_price)
-                    
-            elif in_position:  # Currently holding position
-                pnl = (current_price - entry_price) / entry_price
-                
-                # exit conditions:
-                # state changes to bear
-                # state changes to neutral
-                # stop loss hit (-2%)
-                # take profit hit (+3%)
-                if (state in ['bear', 'neutral'] and confidence > 0.6) or \
-                   pnl <= -0.02 or pnl >= 0.03:
-                    
-                    portfolio.loc[portfolio.index[i], 'value'] *= (1 + pnl * self.config.position_size)
-                    in_position = False
-                    portfolio.loc[portfolio.index[i], 'trade'] = 'exit'
-                    portfolio.loc[portfolio.index[i], 'position'] = 0
-        
-        # calculate performance metrics
+        return portfolio
+
+    def _calculate_pnl(self, portfolio: pd.DataFrame, i: int, entry_price: float) -> float:
+        """Calculate profit and loss"""
+        return (portfolio['price'].iloc[i] - entry_price) / entry_price
+
+    def _enter_position(self, portfolio: pd.DataFrame, i: int, entry_amount: float) -> pd.DataFrame:
+        """Enter a new position"""
+        shares = entry_amount / portfolio['price'].iloc[i] * (1 - self.config.maker_fee)
+        portfolio.loc[portfolio.index[i], 'position'] = shares
+        portfolio.loc[portfolio.index[i], 'cash'] = portfolio['cash'].iloc[i-1] - entry_amount
+        portfolio.loc[portfolio.index[i], 'trade'] = 'buy'
+        return portfolio
+
+    def _exit_position(self, portfolio: pd.DataFrame, i: int, current_pnl: float) -> pd.DataFrame:
+        """Exit the position"""
+        portfolio.loc[portfolio.index[i], 'position'] = 0
+        portfolio.loc[portfolio.index[i], 'cash'] += (
+            portfolio['position'].iloc[i-1] * 
+            portfolio['price'].iloc[i] * 
+            (1 - self.config.taker_fee)
+        )
+        portfolio.loc[portfolio.index[i], 'trade'] = 'sell'
+        return portfolio
+
+    def _update_portfolio_values(self, portfolio: pd.DataFrame, i: int) -> pd.DataFrame:
+        """Update portfolio values"""
+        portfolio.loc[portfolio.index[i], 'value'] = (
+            portfolio['cash'].iloc[i] + 
+            portfolio['position'].iloc[i] * portfolio['price'].iloc[i]
+        )
+        return portfolio
+
+    def _calculate_results(self, portfolio: pd.DataFrame, predictions: pd.DataFrame) -> Dict:
+        """Calculate performance metrics"""
         returns = portfolio['value'].pct_change().dropna()
         total_return = (portfolio['value'].iloc[-1] / self.config.initial_balance) - 1
         buy_hold_return = (portfolio['buy_hold'].iloc[-1] / self.config.initial_balance) - 1
@@ -116,26 +172,28 @@ class BacktestStrategy:
                 'total_trades': len(trades)
             }
         }
-        
-        # print performance summary
-        print("\nPerformance Summary:")
-        print(f"Total Return: {results['performance']['total_return']:.2%}")
-        print(f"Buy & Hold Return: {results['performance']['buy_hold_return']:.2%}")
-        print(f"Sharpe Ratio: {results['performance']['sharpe_ratio']:.2f}")
-        print(f"Max Drawdown: {results['performance']['max_drawdown']:.2%}")
-        print(f"Win Rate: {results['performance']['win_rate']:.2%}")
-        print(f"Total Trades: {results['performance']['total_trades']}")
-        
+        #    Print trade summary
+        print("\nTrade Summary:")
+        trades = portfolio[portfolio['trade'] != '']
+        for idx, trade in trades.iterrows():
+            print(f"{idx}: {trade['trade'].upper()} at {trade['price']:.4f}")
+
         return results
-    
-    def _calculate_sharpe(self, returns: pd.Series) -> float:
-        """Calculate annualized Sharpe ratio for 15-min returns"""
-        if len(returns) < 2 or returns.std() == 0:
-            return 0.0
         
-        # annualize for 15-min returns (4 periods per hour, 24 hours, 365 days)
-        return np.sqrt(365*24*4) * returns.mean() / returns.std()
-    
-    def _calculate_max_drawdown(self, returns: pd.Series) -> float:
+
+    def _calculate_sharpe(self, returns: pd.Series) -> float:
+        """Calculate Sharpe ratio with proper error handling"""
+        if len(returns) < 2:  # Need at least 2 points for std
+            return 0
+        
+        std = returns.std()
+        if std == 0 or np.isnan(std):  # Handle zero/nan std case
+            return 0
+        
+        return returns.mean() / std * np.sqrt(252)  # Annualized
+
+    def _calculate_max_drawdown(self, values: pd.Series) -> float:
         """Calculate maximum drawdown"""
-        return (returns / returns.cummax() - 1).min()
+        peak = values.expanding(min_periods=1).max()
+        drawdown = (values - peak) / peak
+        return drawdown.min()

@@ -295,12 +295,12 @@ class Collector:
             batch_symbols = symbols[i:i + batch_size]
             print(f"Processing batch {i//batch_size + 1} ({len(batch_symbols)} symbols)")
             
-            batch_candidates = candidates_df.loc[batch_symbols]
-            historical_data = self.fetch_historical_data(batch_candidates)
+            # batch_candidates = candidates_df.loc[batch_symbols]
+            # historical_data = self.fetch_historical_data(batch_candidates)
             
-            for symbol, df in historical_data.items():
-                os.makedirs('./data/historical', exist_ok=True)
-                df.to_csv(f'./data/historical/historical_{symbol}_{timestamp}.csv')
+            # for symbol, df in historical_data.items():
+            #     os.makedirs('./data/historical', exist_ok=True)
+            #     df.to_csv(f'./data/historical/historical_{symbol}_{timestamp}.csv')
                 
             
             if i + batch_size < len(symbols):

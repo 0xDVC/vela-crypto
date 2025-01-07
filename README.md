@@ -68,3 +68,12 @@ git clone git@github.com:0xDVC/vela-crypto.git
 cd vela-crypto
 python -m poetry add $(cat requirements.txt) # 'python -m pip install poetry' if you don't have it
 ```
+
+## Features Used
+The model uses the following technical features for market regime detection:
+- Returns: Price returns
+- Volatility: Rolling standard deviation of returns
+- MA Trend: Moving average trend indicator
+- RSI: Relative Strength Index
+- ADX: Average Directional Index
+- Trend Strength: Combined momentum and volume indicator
