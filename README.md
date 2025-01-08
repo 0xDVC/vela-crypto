@@ -16,8 +16,6 @@ revised: currently, fine-tuning the model and backtesting.
 - [x] model training (WIP)
 - [x] backtesting
 - [x] model evaluation (fine-tuning)
-- [x] organize cells into relative classes. (WIP)
-- [ ] model deployment on streamlit
 
 ## justification of choices:
 - collection of data:
@@ -31,31 +29,12 @@ revised: currently, fine-tuning the model and backtesting.
     -  the data retrieved has been validated to accurately represent the market cap of the symbols. I randomly selected 10 symbols and compared the data on [coingecko.com](https://www.coingecko.com/en/coins).
 
 
-### get the data
-```bash
-    python -m core.collect
-```
-
-### run
-```bash
-    python main.py
-```
-
 ## project structure
 _consistently under update_
 ```
 .
 ├── README.md
-├── __init__.py
-├── core
-│   ├── __init__.py
-│   ├── backtest.py
-│   ├── collect.py
-│   ├── features.py
-│   └── model.py
-├── explore.ipynb
-├── index.html
-├── main.py
+├── vela_crypto_model.ipynb
 ├── poetry.lock
 ├── pyproject.toml
 └── requirements.txt
@@ -66,7 +45,8 @@ _consistently under update_
 ```bash
 git clone git@github.com:0xDVC/vela-crypto.git
 cd vela-crypto
-python -m poetry add $(cat requirements.txt) # 'python -m pip install poetry' if you don't have it
+python -m poetry install # 'python -m pip install poetry' if you don't have it
+run the notebook
 ```
 
 ## Features Used

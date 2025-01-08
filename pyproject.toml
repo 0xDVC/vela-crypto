@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "vela-crypto"
 version = "0.1.0"
-description = ""
+description = "short-term prediction model for recently listed, small-cap cryptocurrencies using HMM with Baum-Welch algo"
 authors = ["0xDVC <neilohene@gmail.com>"]
 readme = "README.md"
 
@@ -15,11 +15,10 @@ matplotlib = "^3.10.0"
 seaborn = "^0.13.2"
 requests = "^2.32.3"
 hmmlearn = "^0.3.3"
-ipykernel = "^6.29.5"
 ta = "^0.11.0"
-plotly = "^5.24.1"
+ipykernel = "^6.29.5"
 streamlit = "^1.41.1"
-watchdog = "^6.0.0"
+plotly = "^5.24.1"
 
 
 [build-system]
