@@ -93,7 +93,7 @@ picked these features after way too much testing:
 ```
 
 ## stats on random trade of a symbol
-![Randome trade](image-1.png)
+![Random trade](image-1.png)
 
 _you can see that the model is able to catch the market regime early and trade accordingly, however, its missing neutral states and acting on just two states. needs a bit of work there_
 _stop-loss and take-profit are not implemented yet. that's why we see a sharp decline in the account value after the first few successful trades. of course, wrong signals are also a factor here._
