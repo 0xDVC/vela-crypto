@@ -1,7 +1,7 @@
 # vela crypto: hmm-based crypto trading model 
 
 ## overview
-built a trading model for newly listed crypto assets using hidden markov models (hmm). the idea is to catch market regimes early and trade based on state transitions.
+built a trading model for newly listed crypto assets using hidden markov models (hmm) with Baum-Welch algorithm. the idea is to catch market regimes early and trade based on state transitions.
 
 ## approach
 - hmm for detecting market regimes (bull/bear/neutral)
@@ -79,8 +79,6 @@ picked these features after way too much testing:
 
 - [ ] model improvements:      
   - cross-validation for states   ```# this i could work out some improvements out.```
-  - try different hmm implementations
-  - maybe hybrid with other ml models
 
 ## project structure
 ```
@@ -93,7 +91,7 @@ picked these features after way too much testing:
 ```
 
 ## stats on random trade of a symbol
-![Random trade](image-1.png)
+![Random trade](./image.png)
 
 _you can see that the model is able to catch the market regime early and trade accordingly, however, its missing neutral states and acting on just two states. needs a bit of work there_
 _stop-loss and take-profit are not implemented yet. that's why we see a sharp decline in the account value after the first few successful trades. of course, wrong signals are also a factor here._
