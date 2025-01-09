@@ -8,8 +8,10 @@ import pandas as pd
 from tqdm import tqdm
 import time
 import os
+import streamlit as st
 
-
+BINANCE_API_KEY = st.secrets["BINANCE_API_KEY"]
+BINANCE_API_SECRET = st.secrets["BINANCE_API_SECRET"]
 
 @dataclass
 class MarketFilters():
@@ -26,7 +28,11 @@ class MarketData():
     """Collect market data from Binance"""
     def __init__(self):
         self.filters = MarketFilters()
-        self.client = Client()
+        try:
+            self.client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+        except Exception as e:
+            print(f"Error initializing Binance client: {e}")
+            self.client = Client(testnet=True)
         self.memory = Memory(location='.cache', verbose=0)
 
 

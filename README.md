@@ -7,8 +7,9 @@ a trading model for newly listed crypto assets using hidden markov models (hmm) 
 ```bash
 git clone git@github.com:0xDVC/vela-crypto.git
 cd vela-crypto
-poetry install  # need poetry? -> curl -sSL https://install.python-poetry.org | python3 -
-poetry shell
+python3 -m poetry shell # need poetry? python3 -m pip install poetry
+python3 -m poetry install
+streamlit run app.py
 ```
 
 ## dependencies
