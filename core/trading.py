@@ -9,7 +9,7 @@ import numpy as np
 class TradingConfig:
     initial_balance: float = 10000.0
     trading_fee: float = 0.001
-    position_size: float = 0.95
+    position_size: float = 0.65
     stop_loss_pct: float = 0.05  # 5% stop loss
     trailing_stop_pct: float = 0.07  # 7% trailing stop
 
