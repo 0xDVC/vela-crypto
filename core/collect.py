@@ -146,5 +146,7 @@ class MarketData():
 
                 if i + MarketFilters.BATCH_SIZE < len(symbols):
                     time.sleep(MarketFilters.SLEEP_TIME)  # avoid rate limits
+                
+        return df
         
 
