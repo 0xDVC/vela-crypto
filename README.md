@@ -15,7 +15,7 @@ streamlit run app.py
 ## dependencies
 ```toml
 python = "^3.11"
-pandas = "2.1.4"
+pandas = "2.1.4"  # very important
 scikit-learn = "^1.6.0"
 python-binance = "^1.0.27"
 hmmlearn = "^0.3.3"
@@ -27,7 +27,7 @@ seaborn = "^0.13.2"
 requests = "^2.32.3"
 ipykernel = "^6.29.5"
 plotly = "^5.24.1"
-numpy = "1.26.4"
+numpy = "1.26.4"    # very important, otherwise you'll run into convergence issues with the model
 ```
 
 ## how it works
@@ -196,3 +196,4 @@ class TradingConfig:
 - sentiment analysis for better regime detection
 - on-chain data for better risk management
 - portfolio management for better performance
+- strategy self-adaptation for dynamic market conditions (highly volatile markets like the crypto market and especially low-cap assets require more adaptive strategies, and more so, self-adaptive strategies)

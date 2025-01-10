@@ -65,7 +65,7 @@ def main():
                 # calculate buy & hold values for comparison
                 initial_price = test_price_data['close'].iloc[0]
                 buy_hold_values = pd.Series(
-                    test_price_data['close'] * simulator.trading_config.initial_balance / initial_price,
+                    test_price_data['close'] * simulator.config.initial_balance / initial_price,
                     index=test_price_data.index
                 )
                 

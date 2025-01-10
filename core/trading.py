@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .model import HMMMarketCycle
+# from .model import HMMMarketCycle
 import pandas as pd
 from typing import Dict, List, Tuple
 import numpy as np
@@ -9,100 +9,147 @@ import numpy as np
 class TradingConfig:
     initial_balance: float = 10000.0
     trading_fee: float = 0.001
-    position_size: float = 0.65
-    stop_loss_pct: float = 0.05  # 5% stop loss
-    trailing_stop_pct: float = 0.07  # 7% trailing stop
+    position_size: float = 0.95
+    stop_loss_pct: float = 0.05     
+    trailing_stop_pct: float = 0.07
+    max_drawdown_pct: float = 0.15  # Maximum drawdown before stopping
 
 
 class TradingStrategy:
-    def __init__(self):
-        self.trading_config = TradingConfig()
-        self.model = HMMMarketCycle()
+    def __init__(self, config: TradingConfig = None):
+        self.config = config or TradingConfig()
         self.reset()
-        self.volatility_window = 20  # rolling window for volatility calculation
-
+        
     def reset(self):
         """Reset trading state"""
-        self.current_balance = self.trading_config.initial_balance
-        self.units = 0
         self.in_position = False
-        self.stop_loss_price = 0
-        self.trailing_stop_price = 0
-        self.portfolio_values = []
-        self.trade_history = []
-
-    def execute_trade(self, date: pd.Timestamp, price: float, state: str) -> Dict:
-        """execute trading logic based on current state and price"""
-        # check stop loss if in position
+        self.entry_price = 0.0
+        self.stop_loss_price = 0.0
+        self.trailing_stop_price = 0.0
+        self.peak_portfolio_value = self.config.initial_balance
+        self.current_balance = self.config.initial_balance
+        self.position_size = 0.0
+        self.units = 0.0  # track number of units held
+        self.price_history = []  # store recent prices for volatility calculation
+        self.trade_history = []  # initialize trade history list
+        
+    def calculate_volatility(self, price: float) -> float:
+        """Calculate rolling volatility"""
+        # Add new price to history
+        self.price_history.append(price)
+        
+        # Maintain window size
+        if len(self.price_history) > self.config.volatility_window:
+            self.price_history = self.price_history[-self.config.volatility_window:]
+            
+        # Need at least 2 prices to calculate volatility
+        if len(self.price_history) < 2:
+            return 0.0
+            
+        # Calculate returns and volatility
+        prices = np.array(self.price_history)
+        returns = np.diff(prices) / prices[:-1]
+        return np.std(returns)
+        
+    def _calculate_portfolio_value(self, current_price: float) -> float:
+        """Calculate current portfolio value"""
         if self.in_position:
+            return self.units * current_price
+        return self.current_balance
+        
+    def execute_trade(self, date: pd.Timestamp, price: float, state: str) -> Dict:
+        """Execute trading logic with simplified risk management"""
+        current_portfolio_value = self._calculate_portfolio_value(price)
+        
+        # Calculate drawdown from peak
+        drawdown = (self.peak_portfolio_value - current_portfolio_value) / self.peak_portfolio_value
+        
+        # Update peak portfolio value
+        if current_portfolio_value > self.peak_portfolio_value:
+            self.peak_portfolio_value = current_portfolio_value
+        
+        # Check maximum drawdown threshold
+        if drawdown >= self.config.max_drawdown_pct:
+            if self.in_position:
+                return self._exit_position(date, price, "max_drawdown")
+            return None  # Stop trading after hitting max drawdown
+        
+        # Position Management
+        if self.in_position:
+            # Exit on state change
+            if state != "bull":
+                return self._exit_position(date, price, "state_change")
+                
+            # Fixed stop-loss
             if price <= self.stop_loss_price:
                 return self._exit_position(date, price, "stop_loss")
-
-            # update trailing stop if price moves higher
-            if price > self.trailing_stop_price / (1 - self.trading_config.trailing_stop_pct):
-                self.trailing_stop_price = price * (1 - self.trading_config.trailing_stop_pct)
+                
+            # Standard trailing stop
+            if price > self.trailing_stop_price / (1 - self.config.trailing_stop_pct):
+                self.trailing_stop_price = price * (1 - self.config.trailing_stop_pct)
                 self.stop_loss_price = max(self.stop_loss_price, self.trailing_stop_price)
-
-        # only trade in bullish conditions
-        if state == "bull":
-            if not self.in_position:
-                # enter with full position in bull market
-                return self._enter_position(date, price, position_size=0.95)
-        else:
-            # exit if market turns non-bullish
-            if self.in_position:
-                return self._exit_position(date, price, "exit_non_bull")
-
+                
+        # Entry logic - trust the model's state prediction
+        elif state == "bull":
+            return self._enter_position(date, price)
+            
         return None
 
-    def _enter_position(self, date: pd.Timestamp, price: float, position_size: float = None) -> Dict:
-        """enter a long position with optional position size override"""
-        size = position_size if position_size is not None else self.trading_config.position_size
-        position_value = self.current_balance * size
-        self.units = position_value / price
-        fee = position_value * self.trading_config.trading_fee
-        self.current_balance -= position_value + fee
+    def _enter_position(self, date: pd.Timestamp, price: float) -> Dict:
+        """Enter a new position"""
+        self.position_size = self.current_balance * self.config.position_size
+        self.units = self.position_size / price
+        self.entry_price = price
+        
+        fee = self.position_size * self.config.trading_fee
+        self.current_balance -= (self.position_size + fee)
         self.in_position = True
-
-        # set initial stops
-        self.stop_loss_price = price * (1 - self.trading_config.stop_loss_pct)
-        self.trailing_stop_price = price * (1 - self.trading_config.trailing_stop_pct)
+        
+        # Set initial stop-loss and trailing stop
+        self.stop_loss_price = price * (1 - self.config.stop_loss_pct)
+        self.trailing_stop_price = price * (1 - self.config.trailing_stop_pct)
+        
         trade = {
-            "date": date,
-            "action": "buy",
-            "price": price,
-            "units": self.units,
-            "fee": fee,
-            "balance": self.current_balance,
+            'date': date,
+            'type': 'enter',
+            'price': price,
+            'units': self.units,
+            'fee': fee
         }
         self.trade_history.append(trade)
         return trade
-
-    def _exit_position(self, date: pd.Timestamp, price: float, action: str) -> Dict:
+        
+    def _exit_position(self, date: pd.Timestamp, price: float, reason: str) -> Dict:
         """Exit current position"""
-        position_value = self.units * price
-        fee = position_value * self.trading_config.trading_fee
-        self.current_balance += position_value - fee
-
+        if not self.in_position:
+            return None
+            
+        exit_value = self.units * price
+        fee = exit_value * self.config.trading_fee
+        self.current_balance += (exit_value - fee)
+        
         trade = {
-            "date": date,
-            "action": action,
-            "price": price,
-            "units": self.units,
-            "fee": fee,
-            "balance": self.current_balance,
+            'date': date,
+            'type': 'exit',
+            'price': price,
+            'units': self.units,
+            'reason': reason,
+            'fee': fee
         }
-
-        self.units = 0
+        
+        # Reset position tracking
         self.in_position = False
+        self.units = 0.0
+        self.position_size = 0.0
+        
         self.trade_history.append(trade)
         return trade
 
     def calculate_dynamic_stops(self, price: float, current_volatility: float):
         """calculate dynamic stop losses based on volatility"""
         # base stops
-        base_stop = self.trading_config.stop_loss_pct
-        base_trailing = self.trading_config.trailing_stop_pct
+        base_stop = self.config.stop_loss_pct
+        base_trailing = self.config.trailing_stop_pct
         
         # adjust stops based on volatility
         volatility_multiplier = min(3.0, max(1.0, current_volatility * 100))
@@ -120,36 +167,15 @@ class TradingStrategy:
         self.reset()
         portfolio_values = []
         
-        # calculate rolling volatility
-        test_data['returns'] = np.log(test_data['close']).diff()
-        test_data['volatility'] = test_data['returns'].rolling(self.volatility_window).std()
-        
-        # add state persistence to avoid frequent trading
-        state_counter = 0
-        current_state = None
-        min_state_duration = 4  # minimum periods to hold a state
+        # We already have the predictions and features from the model
+        # No need to recalculate anything
         
         for i in range(len(predictions)):
             date = predictions.index[i]
             price = test_data.loc[date, 'close']
             raw_state = predictions['state'].iloc[i]
-            current_vol = test_data.loc[date, 'volatility']
             
-            # state persistence logic
-            if raw_state != current_state:
-                state_counter += 1
-                if state_counter >= min_state_duration:
-                    current_state = raw_state
-                    state_counter = 0
-            else:
-                state_counter = 0
-            
-            # execute trade with persisted state
-            if self.in_position:
-                # update stops dynamically based on current volatility
-                self.calculate_dynamic_stops(price, current_vol)
-                
-            trade = self.execute_trade(date, price, current_state)
+            trade = self.execute_trade(date, price, raw_state)
             
             # calculate current portfolio value
             portfolio_value = self.current_balance

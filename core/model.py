@@ -96,12 +96,10 @@ class HMMMarketCycle:
     def _assign_state_labels(self, X: np.ndarray) -> List[str]:
         """Assign labels to states based on their features."""
         states = self.model.predict(X)
-        
-        # Calculate means for each state using the original (unscaled) features
         X_original = self.scaler.inverse_transform(X)
         state_means = np.array([X_original[states == i].mean(axis=0) for i in range(self.config.n_states)])
         
-        # Get indices for features
+        # Get feature indices
         returns_idx = self.feature_columns.index("returns")
         vol_idx = self.feature_columns.index("volatility")
         momentum_idx = self.feature_columns.index("momentum")
@@ -110,44 +108,28 @@ class HMMMarketCycle:
         labels = []
         state_info = []
         
-        # Calculate combined score with more weight on returns and momentum
-        state_scores = (
-            state_means[:, returns_idx] * 2.0 +  # Double weight on returns
-            state_means[:, momentum_idx] * 1.5 +  # 1.5x weight on momentum
-            (state_means[:, rsi_idx] - 50) / 50  # Normalized RSI contribution
-        )
-        
-        # Sort states by score
-        state_order = np.argsort(state_scores)
-        
-        # Classify states with more aggressive thresholds
-        for i, state_idx in enumerate(state_order):
-            returns = state_means[state_idx, returns_idx]
-            volatility = state_means[state_idx, vol_idx]
-            momentum = state_means[state_idx, momentum_idx]
-            rsi = state_means[state_idx, rsi_idx]
+        # Revised classification logic with stricter thresholds
+        for i in range(self.config.n_states):
+            returns = state_means[i, returns_idx]
+            volatility = state_means[i, vol_idx]
+            momentum = state_means[i, momentum_idx]
+            rsi = state_means[i, rsi_idx]
             
-            # Bull market characteristics:
-            # - Positive returns
-            # - Strong momentum
-            # - RSI > 50
-            if returns > 0.0001 and momentum > 0 and rsi > 50:
+            # Bull market: Strong positive signals required
+            if returns > 0.0005 and momentum > 0 and rsi > 55 and volatility < 0.015:
                 label = "bull"
-            # Bear market characteristics:
-            # - Negative returns
-            # - High volatility
-            # - RSI < 40
-            elif returns < -0.0005 or (volatility > 0.01 and rsi < 40):
+            # Bear market: Any strong negative signal
+            elif returns < -0.0003 or (volatility > 0.02 and rsi < 45):
                 label = "bear"
             else:
                 label = "neutral"
             
             labels.append(label)
-            state_info.append((state_idx, label, returns, volatility, momentum, rsi))
+            state_info.append((i, label, returns, volatility, momentum, rsi))
         
         print("\nState Classification:")
         for state, label, ret, vol, mom, rsi in state_info:
-            print(f"State {state}: {label:<6} (Returns: {ret:8.6f}, Volatility: {vol:8.6f}, "
+            print(f"State {state}: {label:<6} (Returns: {ret:8.6f}, Vol: {vol:8.6f}, "
                   f"Momentum: {mom:8.6f}, RSI: {rsi:8.2f})")
         
         return labels
